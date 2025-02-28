@@ -67,9 +67,8 @@ const createCustomer = async (req, res) => {
             pais,
             provincia,
             rif,
-            teléfono,
+            telefono,
         } = req.body;
-        console.log('---------------', teléfono,'---------------')
         console.log('---------------', telefono,'---------------')
         const customer = await Customer.create({
             cedula,
@@ -83,7 +82,7 @@ const createCustomer = async (req, res) => {
             pais,
             provincia,
             rif,
-            telefono:teléfono
+            telefono
         });
 
         res.status(201).json(customer);

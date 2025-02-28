@@ -22,11 +22,19 @@ const Sale = sequelize.define('Sale', {
 
 // Importamos SaleItem después de definir Sale para evitar dependencias circulares
 const SaleItem = require('./SaleItem');
+const SaleService = require('./SaleService');
 
 // Definir la relación con SaleItem
 Sale.hasMany(SaleItem, {
     foreignKey: 'sell_id',
     as: 'items'
 });
+
+// Relación con SaleService
+Sale.hasMany(SaleService, {
+    foreignKey: 'sell_id',
+    as: 'services'
+});
+
 
 module.exports = Sale;

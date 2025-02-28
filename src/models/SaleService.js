@@ -1,7 +1,7 @@
 const { DataTypes } = require('sequelize');
 const sequelize = require('../config/sequelize');
 
-const SaleItem = sequelize.define('SaleItem', {
+const SaleService = sequelize.define('SaleService', {
     id: {
         type: DataTypes.INTEGER,
         primaryKey: true,
@@ -11,7 +11,7 @@ const SaleItem = sequelize.define('SaleItem', {
         type: DataTypes.INTEGER,
         allowNull: false,
         references: {
-            model: 'sells',
+            model: 'sells', // Referencia a la tabla de ventas
             key: 'id'
         }
     },
@@ -23,15 +23,11 @@ const SaleItem = sequelize.define('SaleItem', {
         type: DataTypes.STRING(50),
         allowNull: false
     },
-    producto_id: {
-        type: DataTypes.STRING(50),
-        allowNull: false
-    },
     service_id: {
-        type: DataTypes.STRING(50),
-        allowNull: true,
+        type: DataTypes.INTEGER,
+        allowNull: false,
         references: {
-            model: 'servicios_vendidos', // Referencia a la tabla de servicios
+            model: 'services', // Referencia a la tabla de servicios
             key: 'id'
         }
     },
@@ -48,8 +44,8 @@ const SaleItem = sequelize.define('SaleItem', {
         allowNull: false
     }
 }, {
-    tableName: 'productos_vendidos',
-    timestamps: false
+    tableName: 'servicios_vendidos', // Nombre de la tabla en la base de datos
+    timestamps: false // Deshabilitar los campos createdAt y updatedAt
 });
 
-module.exports = SaleItem;
+module.exports = SaleService;

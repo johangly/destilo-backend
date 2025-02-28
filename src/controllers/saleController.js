@@ -1,5 +1,6 @@
 const Sale = require('../models/Sale');
 const SaleItem = require('../models/SaleItem');
+const SaleService = require('../models/SaleService');
 const Service = require('../models/Service');
 const Stock = require('../models/Stock');
 const Customer = require('../models/Customer');
@@ -27,11 +28,11 @@ const getSales = async (req, res) => {
         // }
         const sells = await Sale.findAll({
             include: [
-                {
-                    model: SaleItem,
-                    as: 'items',
-                    attributes: ['cantidad', 'fecha', 'producto_id', 'nombre', 'precioTotal', 'precioUnitario']
-                }
+            {
+                model: SaleItem,
+                as: 'items',
+                attributes: ['cantidad', 'fecha', 'producto_id', 'nombre', 'precioTotal', 'precioUnitario'],
+            }
             ],
         });
         // const sales = await Sale.findAndCountAll({
@@ -66,24 +67,91 @@ const getSales = async (req, res) => {
 const getSaleById = async (req, res) => {
     try {
         const { id } = req.params;
-        const sale = await Sale.findByPk(id, {
-            include: [
-                {
-                    model: Customer,
-                    as: 'cliente',
-                    attributes: ['id', 'nombre', 'email', 'telefono']
-                },
-                {
-                    model: SaleItem,
-                    as: 'items',
-                    include: [{
-                        model: Service,
-                        as: 'servicio',
-                        attributes: ['id', 'nombre', 'precio']
-                    }]
-                }
-            ]
+        // console.log('id de la venta desde backend:',id)
+        const sale = await Sale.findByPk(id);
+        const saleServices = await SaleService.findAll({
+            where: {
+                sell_id: id
+            },
+            attributes: ['id', 'sell_id', 'cantidad', 'fecha', 'service_id', 'nombre', 'precioTotal', 'precioUnitario']
         });
+        // console.log('saleServices',saleServices[0])
+        // console.log('saleServices.length',saleServices.length)
+        // busco todos los stocks de los servicios en la venta
+        for (let i = 0; i < saleServices.length; i++) {
+            const service = saleServices[i].dataValues;
+            const saleItemsFromService = await SaleItem.findAll({
+                where: {
+                    service_id: service.id
+                },
+                attributes: ['id', 'sell_id', 'cantidad', 'fecha', 'service_id', 'nombre', 'precioTotal', 'precioUnitario']
+            });
+            service.items = saleItemsFromService;
+        }
+        saleServices.forEach(element => {
+            console.log('saleServices',element.dataValues)
+            console.log('-----------------------------------------------------------')
+        });
+        
+        const saleItems = await SaleItem.findAll({
+            where: {
+                sell_id: id
+            },
+            attributes: ['id', 'sell_id', 'cantidad', 'fecha', 'service_id', 'nombre', 'precioTotal', 'precioUnitario']
+        });
+
+        const newSaleItems = [];
+        for (let index = 0; index < saleItems.length; index++) {
+            const itemSaleIteration = saleItems[index].dataValues;
+
+            let valueExist = false;
+            for (let i = 0; i < saleServices.length; i++) {
+                const service = saleServices[i].dataValues;
+                if (service.items && service.items.length > 0) {
+                    for (let i2 = 0; i2 < service.items.length; i2++) {
+                        const stockInService = service.items[i2];
+                        
+                        if(stockInService.service_id === itemSaleIteration.service_id) {
+                            valueExist = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if(!valueExist) {
+                newSaleItems.push(itemSaleIteration);
+            }
+        }
+        console.log('-----------------------------------------------------------')
+
+        console.log('newSaleItems',newSaleItems)
+        const result = {
+            ...sale.dataValues,
+            items: [
+                ...saleServices,
+                ...newSaleItems
+            ].sort((a,b) => new Date(b.fecha) - new Date(a.fecha))
+        }
+        console.log('-----------------------------------------------------------')
+        console.log('resultado alterado',result)
+        // include: [
+        //     {
+        //         model: Customer,
+        //         as: 'cliente',
+        //         attributes: ['id', 'nombre', 'email', 'telefono']
+        //     },
+        //     {
+        //         model: SaleItem,
+        //         as: 'items',
+        //         include: [{
+        //             model: Service,
+        //             as: 'servicio',
+        //             attributes: ['id', 'nombre', 'precio']
+        //         }]
+        //     }
+        // ]
+        console.log('sale consultada:',sale)
         
         if (!sale) {
             return res.status(404).json({
@@ -91,8 +159,9 @@ const getSaleById = async (req, res) => {
             });
         }
 
-        res.json(sale);
+        res.json(result);
     } catch (error) {
+        console.log('!!!!!!error al ejecutar el codigo!!!!!!!!:',error)
         res.status(500).json({
             error: 'Error al obtener la venta',
             detalles: error.message
@@ -103,9 +172,10 @@ const getSaleById = async (req, res) => {
 // Crear nueva venta
 const createSale = async (req, res) => {
     const t = await sequelize.transaction();
-    
     try {
         const { fecha, id_factura, productos } = req.body;
+        console.log('productos:', productos)
+
         // Verificar que todos los campos requeridos estén presentes
         if (!fecha || !id_factura || !productos || !productos.length) {
             return res.status(400).json({
@@ -122,9 +192,21 @@ const createSale = async (req, res) => {
             });
         }
 
+        // extra los productos que sean de tipo 'stock'.
+        const productosDeStock = []
+        productos.forEach(item => {
+            if (item.type === 'stock') {
+                productosDeStock.push(item)
+            } else if (item.type === 'service') {
+                item.productosAsociado.forEach(producto => {
+                    productosDeStock.push(producto)
+                })
+            }
+        });
         // Verificar y validar todos los productos antes de crear la venta
-        for (const producto of productos) {
-
+        console.log('productosDeStock',productosDeStock)
+        for (const producto of productosDeStock) {
+            console.log('producto desde el primer for',producto)
             if (!producto.cantidad || !producto.codigo || !producto.precioTotal || !producto.precioUnitario) {
                 return res.status(400).json({
                     error: 'Datos de producto incompletos',
@@ -132,7 +214,7 @@ const createSale = async (req, res) => {
                 });
             }
 
-            const stock = await Stock.findOne({ 
+            const stock = await Stock.findOne({
                 where: { codigo: producto.codigo }
             });
 
@@ -157,32 +239,95 @@ const createSale = async (req, res) => {
             id_factura
         }, { transaction: t });
 
+        // return;
         // Crear los productos vendidos y actualizar stock
         const productosVendidos = [];
         for (const producto of productos) {
-            const stock = await Stock.findOne({ 
-                where: { codigo: producto.codigo },
-                transaction: t,
-                lock: true // Bloquear el registro para evitar condiciones de carrera
-            });
+            console.log('producto desde el segundo for:',producto)
+            if (producto.type === 'stock') {
+                const stock = await Stock.findOne({
+                    where: { codigo: producto.codigo },
+                    transaction: t,
+                    lock: true // Bloquear el registro para evitar condiciones de carrera
+                });
 
-            // Crear el registro de producto vendido
-            const productoVendido = await SaleItem.create({
-                sell_id: sale.id,
-                cantidad: parseInt(producto.cantidad),
-                fecha: fecha,
-                producto_id: producto.codigo,
-                nombre: stock.producto,
-                precioTotal: parseFloat(producto.precioTotal).toFixed(2),
-                precioUnitario: parseFloat(producto.precioUnitario).toFixed(2)
-            }, { transaction: t });
+                // Crear el registro de producto vendido
+                const productoVendido = await SaleItem.create({
+                    sell_id: sale.id,
+                    cantidad: parseInt(producto.cantidad),
+                    fecha: fecha,
+                    producto_id: producto.codigo,
+                    nombre: stock.producto,
+                    precioTotal: parseFloat(producto.precioTotal).toFixed(2),
+                    precioUnitario: parseFloat(producto.precioUnitario).toFixed(2)
+                }, { transaction: t });
 
-            productosVendidos.push(productoVendido);
+                productosVendidos.push(productoVendido);
 
-            // Actualizar stock
-            await stock.update({
-                cantidad: (parseInt(stock.cantidad) - parseInt(producto.cantidad)).toString()
-            }, { transaction: t });
+                // Actualizar stock
+                await stock.update({
+                    cantidad: (parseInt(stock.cantidad) - parseInt(producto.cantidad)).toString()
+                }, { transaction: t });
+            } else if (producto.type === 'service') {
+
+                const servicioVendido = await SaleService.create({
+                    sell_id: sale.id,
+                    cantidad: parseInt(producto.cantidad),
+                    fecha: fecha,
+                    service_id: producto.id,
+                    nombre: producto.nombre,
+                    precioTotal: parseFloat(producto.precioTotal).toFixed(2),
+                    precioUnitario: parseFloat(producto.precioUnitario).toFixed(2)
+                }, { transaction: t });
+
+                productosVendidos.push(servicioVendido);
+                if (producto.productosAsociado.length > 0 && producto.productosAsociado) {
+                    console.log('producto.productosAsociado',producto.productosAsociado)
+                    for (const stockItem of producto.productosAsociado) {
+                        console.log('stockItem', stockItem)
+                        const stock = await Stock.findOne({
+                            where: { codigo: stockItem.codigo },
+                            transaction: t,
+                            lock: true // Bloquear el registro para evitar condiciones de carrera
+                        });
+                        console.log('stockItem 1')
+                        const servicioVendidoId = await servicioVendido.id
+                        console.log('simulacion de insercion',{
+                            sell_id: sale.id,
+                            cantidad: parseInt(stockItem.cantidadInput),
+                            fecha: fecha,
+                            producto_id: stockItem.codigo,
+                            service_id: Number(servicioVendidoId),
+                            nombre: stockItem.producto,
+                            precioTotal: parseFloat(stockItem.precioTotal).toFixed(2),
+                            precioUnitario: parseFloat(stockItem.precioUnitario).toFixed(2)
+                        })
+                        // Crear el registro de producto vendido
+                        const productoVendido = await SaleItem.create({
+                            sell_id: sale.id,
+                            cantidad: parseInt(stockItem.cantidadInput),
+                            fecha: fecha,
+                            producto_id: stockItem.codigo,
+                            service_id: Number(servicioVendidoId),
+                            nombre: stockItem.producto,
+                            precioTotal: parseFloat(stockItem.precioTotal).toFixed(2),
+                            precioUnitario: parseFloat(stockItem.precioUnitario).toFixed(2)
+                        }, { transaction: t });
+
+                        console.log('stockItem 2')
+                        productosVendidos.push(productoVendido);
+                        console.log('stockItem 3')
+
+                        // Actualizar stock
+                        await stock.update({
+                            cantidad: (parseInt(stock.cantidad) - parseInt(stockItem.cantidadInput)).toString()
+                        }, { transaction: t });
+                        console.log('stockItem 4')
+
+                    }
+                }
+            }
+            
         }
 
         await t.commit();
