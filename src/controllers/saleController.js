@@ -1,3 +1,4 @@
+const { literal } = require('sequelize');
 const Sale = require('../models/Sale');
 const SaleItem = require('../models/SaleItem');
 const SaleService = require('../models/SaleService');
@@ -64,104 +65,93 @@ const getSales = async (req, res) => {
 };
 
 // Obtener una venta por ID
+// Funciones auxiliares
+const getSaleData = async (id) => {
+    return await Sale.findByPk(id);
+};
+
+const getSaleServicesWithItems = async (saleId) => {
+    const services = await SaleService.findAll({
+        where: { sell_id: saleId },
+        attributes: [
+            'id', 'sell_id', 'cantidad', 'fecha', 'service_id', 'nombre', 'precioTotal', 'precioUnitario',
+            [literal('\'service\''), 'type']
+        ]
+    });
+
+    // Obtener items para cada servicio
+    for (const service of services) {
+        service.dataValues.items = await getSaleItemsForService(service.dataValues.id);
+    }
+
+    return services;
+};
+
+const getSaleItemsForService = async (serviceId) => {
+    return await SaleItem.findAll({
+        where: { service_id: serviceId },
+        attributes: [
+            'id', 'sell_id', 'cantidad', 'fecha', 'service_id', 'nombre', 'precioTotal', 'precioUnitario',
+            [literal('\'stock\''), 'type']
+        ]
+    });
+};
+
+const filterIndependentItems = (allItems, services) => {
+    return allItems.filter(item => {
+        const itemData = item.dataValues;
+        return !isItemAssociatedWithService(itemData, services);
+    }).map(item => item.dataValues);
+};
+
+const isItemAssociatedWithService = (item, services) => {
+    return services.some(service => 
+        service.dataValues.items?.some(serviceItem => 
+            serviceItem.service_id === item.service_id
+        )
+    );
+};
+
+const buildSaleResult = (sale, services, independentItems) => {
+    return {
+        ...sale.dataValues,
+        items: [...services, ...independentItems].sort((a, b) => 
+            new Date(b.fecha) - new Date(a.fecha)
+        )
+    };
+};
+
 const getSaleById = async (req, res) => {
     try {
         const { id } = req.params;
-        // console.log('id de la venta desde backend:',id)
-        const sale = await Sale.findByPk(id);
-        const saleServices = await SaleService.findAll({
-            where: {
-                sell_id: id
-            },
-            attributes: ['id', 'sell_id', 'cantidad', 'fecha', 'service_id', 'nombre', 'precioTotal', 'precioUnitario']
-        });
-        // console.log('saleServices',saleServices[0])
-        // console.log('saleServices.length',saleServices.length)
-        // busco todos los stocks de los servicios en la venta
-        for (let i = 0; i < saleServices.length; i++) {
-            const service = saleServices[i].dataValues;
-            const saleItemsFromService = await SaleItem.findAll({
-                where: {
-                    service_id: service.id
-                },
-                attributes: ['id', 'sell_id', 'cantidad', 'fecha', 'service_id', 'nombre', 'precioTotal', 'precioUnitario']
-            });
-            service.items = saleItemsFromService;
-        }
-        saleServices.forEach(element => {
-            console.log('saleServices',element.dataValues)
-            console.log('-----------------------------------------------------------')
-        });
         
-        const saleItems = await SaleItem.findAll({
-            where: {
-                sell_id: id
-            },
-            attributes: ['id', 'sell_id', 'cantidad', 'fecha', 'service_id', 'nombre', 'precioTotal', 'precioUnitario']
-        });
-
-        const newSaleItems = [];
-        for (let index = 0; index < saleItems.length; index++) {
-            const itemSaleIteration = saleItems[index].dataValues;
-
-            let valueExist = false;
-            for (let i = 0; i < saleServices.length; i++) {
-                const service = saleServices[i].dataValues;
-                if (service.items && service.items.length > 0) {
-                    for (let i2 = 0; i2 < service.items.length; i2++) {
-                        const stockInService = service.items[i2];
-                        
-                        if(stockInService.service_id === itemSaleIteration.service_id) {
-                            valueExist = true;
-                            break;
-                        }
-                    }
-                }
-            }
-
-            if(!valueExist) {
-                newSaleItems.push(itemSaleIteration);
-            }
-        }
-        console.log('-----------------------------------------------------------')
-
-        console.log('newSaleItems',newSaleItems)
-        const result = {
-            ...sale.dataValues,
-            items: [
-                ...saleServices,
-                ...newSaleItems
-            ].sort((a,b) => new Date(b.fecha) - new Date(a.fecha))
-        }
-        console.log('-----------------------------------------------------------')
-        console.log('resultado alterado',result)
-        // include: [
-        //     {
-        //         model: Customer,
-        //         as: 'cliente',
-        //         attributes: ['id', 'nombre', 'email', 'telefono']
-        //     },
-        //     {
-        //         model: SaleItem,
-        //         as: 'items',
-        //         include: [{
-        //             model: Service,
-        //             as: 'servicio',
-        //             attributes: ['id', 'nombre', 'precio']
-        //         }]
-        //     }
-        // ]
-        console.log('sale consultada:',sale)
-        
+        // Obtener la venta principal
+        const sale = await getSaleData(id);
         if (!sale) {
-            return res.status(404).json({
-                error: 'Venta no encontrada'
-            });
+            return res.status(404).json({ error: 'Venta no encontrada' });
         }
+
+        // Obtener servicios y sus items asociados
+        const saleServices = await getSaleServicesWithItems(id);
+        
+        // Obtener items no asociados a servicios
+        const saleItems = await SaleItem.findAll({
+            where: { sell_id: id },
+            attributes: [
+            'id', 'sell_id', 'cantidad', 'fecha', 'service_id', 'nombre', 'precioTotal', 'precioUnitario',
+            [literal('\'stock\''), 'type']
+        ]
+        });
+
+        // Filtrar items independientes
+        const independentItems = filterIndependentItems(saleItems, saleServices);
+
+        // Construir resultado final
+        const result = buildSaleResult(sale, saleServices, independentItems);
 
         res.json(result);
     } catch (error) {
-        console.log('!!!!!!error al ejecutar el codigo!!!!!!!!:',error)
+        console.error('Error al obtener la venta:', error);
         res.status(500).json({
             error: 'Error al obtener la venta',
             detalles: error.message
