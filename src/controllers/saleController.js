@@ -9,54 +9,90 @@ const { Op } = require('sequelize');
 const sequelize = require('../config/sequelize');
 
 // Listar ventas con paginación y filtros
-const getSales = async (req, res) => {
-    console.log('llegando a sales/')
-    try {
-        // const today = new Date().toISOString().split('T')[0];
-        // const { 
-        //     page = 1, 
-        //     limit = 10, 
-        //     fechaInicio = today, 
-        //     fechaFin = today 
-        // } = req.query;
-        // console.log('params: ', { page, limit, fechaInicio, fechaFin })
-        // const offset = (page - 1) * limit;
+// Función auxiliar para obtener todas las ventas
+const getAllSales = async () => {
+    return await Sale.findAll();
+};
 
-        // let where = {};
-        // if (fechaInicio || fechaFin) {
-        //     if (fechaInicio) where.fecha = fechaInicio;
-        //     if (fechaFin) where.fecha = fechaFin;
-        // }
-        const sells = await Sale.findAll({
-            include: [
-            {
-                model: SaleItem,
-                as: 'items',
-                attributes: ['cantidad', 'fecha', 'producto_id', 'nombre', 'precioTotal', 'precioUnitario'],
-            }
-            ],
+// Función auxiliar para obtener servicios y sus items para múltiples ventas
+const getAllSaleServicesWithItems = async (sales) => {
+    const allSaleServices = [];
+    
+    for (const sale of sales) {
+        const services = await SaleService.findAll({
+            where: { sell_id: sale.id },
+            attributes: [
+                'id', 'sell_id', 'cantidad', 'fecha', 'service_id', 'nombre', 'precioTotal', 'precioUnitario',
+                [literal('\'service\''), 'type']
+            ]
         });
-        // const sales = await Sale.findAndCountAll({
-        //     include: [
-        //         {
-        //             model: SaleItem,
-        //             as: 'items',
-        //             attributes: ['cantidad', 'fecha', 'producto_id', 'nombre', 'precioTotal', 'precioUnitario']
-        //         }
-        //     ],
-        //     order: [['fecha', 'DESC']]
-        // });
 
-        const responseData = {
-            total: sells.length,
-            datos: Array.isArray(sells) ? sells : []
-        };
+        // Obtener items para cada servicio
+        for (const service of services) {
+            service.dataValues.items = await getSaleItemsForService(service.dataValues.id);
+        }
+        
+        allSaleServices.push(...services);
+    }
 
-        console.log('resultado: ', responseData);
+    return allSaleServices;
+};
 
-        res.json(responseData);
+// Función auxiliar para obtener todos los items de venta
+const getAllSaleItems = async (sales) => {
+    const allItems = [];
+    
+    for (const sale of sales) {
+        const items = await SaleItem.findAll({
+            where: { sell_id: sale.id },
+            attributes: [
+                'id', 'sell_id', 'cantidad', 'fecha', 'service_id', 'nombre', 'precioTotal', 'precioUnitario',
+                [literal('\'stock\''), 'type']
+            ]
+        });
+        allItems.push(...items);
+    }
+    
+    return allItems;
+};
+
+// Función auxiliar para construir el resultado de múltiples ventas
+const buildSalesResult = (sales, services, independentItems) => {
+    return sales.map(sale => ({
+        ...sale.dataValues,
+        items: [
+            ...services.filter(service => service.sell_id === sale.id),
+            ...independentItems.filter(item => item.sell_id === sale.id)
+        ].sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
+    }));
+};
+
+const getSales = async (req, res) => {
+    try {
+        // Obtener todas las ventas
+        const sales = await getAllSales();
+        if (!sales || sales.length === 0) {
+            return res.status(404).json({ error: 'No se encontraron ventas' });
+        }
+
+        // Obtener servicios y sus items asociados
+        const saleServices = await getAllSaleServicesWithItems(sales);
+        
+        // Obtener items no asociados a servicios
+        const saleItems = await getAllSaleItems(sales);
+
+        // Filtrar items independientes
+        const independentItems = filterIndependentItems(saleItems, saleServices);
+
+        // Construir resultado final
+        const result = buildSalesResult(sales, saleServices, independentItems);
+
+        res.json({
+            total: result.length,
+            datos: result
+        });
     } catch (error) {
-        console.log('error al ejecutar el codigo:',error)
+        console.error('Error al obtener las ventas:', error);
         res.status(500).json({
             error: 'Error al obtener las ventas',
             detalles: error.message
