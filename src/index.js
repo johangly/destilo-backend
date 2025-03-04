@@ -8,6 +8,8 @@ const serviceRoutes = require('./routes/serviceRoutes');
 const stockRoutes = require('./routes/stockRoutes');
 const saleRoutes = require('./routes/saleRoutes');
 const generalDataRoutes = require('./routes/generalDataRoutes');
+const loginRoutes = require('./routes/loginRoutes');
+const userRoutes = require('./routes/userRoutes');
 
 // Inicialización
 const app = express();
@@ -40,7 +42,9 @@ app.use(`${API_PREFIX}/suppliers`, supplierRoutes);
 app.use(`${API_PREFIX}/services`, serviceRoutes);
 app.use(`${API_PREFIX}/stocks`, stockRoutes);
 app.use(`${API_PREFIX}/sells`, saleRoutes);
+app.use(`${API_PREFIX}/users`, userRoutes);
 app.use(`${API_PREFIX}/general`, generalDataRoutes);
+app.use(`${API_PREFIX}/login`, loginRoutes);
 
 // Manejo de errores
 app.use((err, req, res, next) => {

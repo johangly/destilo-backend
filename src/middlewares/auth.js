@@ -1,25 +1,17 @@
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcrypt');
+const User = require('../models/User'); // Ajusta la ruta según tu estructura
 
-const verifyToken = (req, res, next) => {
-    const token = req.headers['authorization']?.split(' ')[1];
+const SECRET_KEY = process.env.JWT_SECRET; // Cambia esto por una clave segura
 
-    if (!token) {
-        return res.status(403).json({
-            error: 'Se requiere un token para la autenticación'
-        });
-    }
-
-    try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        req.user = decoded;
-        next();
-    } catch (err) {
-        return res.status(401).json({
-            error: 'Token inválido'
-        });
-    }
+// Función para generar un token JWT
+const generateToken = (user) => {
+  return jwt.sign({ id: user.id, role: user.role, username: user.username }, SECRET_KEY, { expiresIn: '1h' });
 };
 
-module.exports = {
-    verifyToken
+// Función para comparar contraseñas
+const comparePassword = async (password, hashedPassword) => {
+  return await bcrypt.compare(password, hashedPassword);
 };
+
+module.exports = { generateToken, comparePassword };

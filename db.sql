@@ -85,3 +85,12 @@ CREATE TABLE stocks (
     producto VARCHAR(100) NOT NULL,         -- Nombre del producto (string)
     proveedor VARCHAR(100) NOT NULL         -- Nombre del proveedor (string)
 );
+
+-- Tabla users
+CREATE TABLE users (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  username VARCHAR(255) NOT NULL UNIQUE,
+  password VARCHAR(255) NOT NULL,
+  role ENUM('admin', 'employee') NOT NULL DEFAULT 'employee',
+  createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
