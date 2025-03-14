@@ -14,10 +14,22 @@ const createUserValidations = [
     body('username')
         .notEmpty().withMessage('El nombre de usuario es requerido')
         .isString().withMessage('El nombre de usuario debe ser texto')
+        .trim()
         .custom(async (value) => {
             const userExists = await User.findOne({ where: { username: value } });
             if (userExists) {
                 throw new Error('El nombre de usuario ya está en uso');
+            }
+            return true;
+        }),
+    body('email')
+        .notEmpty().withMessage('El email es requerido')
+        .isEmail().withMessage('Debe proporcionar un email válido')
+        .trim()
+        .custom(async (value) => {
+            const emailExists = await User.findOne({ where: { email: value } });
+            if (emailExists) {
+                throw new Error('El email ya está en uso');
             }
             return true;
         }),
@@ -28,6 +40,11 @@ const createUserValidations = [
     body('role')
         .optional()
         .isIn(['admin', 'employee']).withMessage('El rol debe ser admin o employee')
+        .default('employee'),
+    body('status')
+        .optional()
+        .isIn(['pending', 'validated']).withMessage('El estado debe ser pending o validated')
+        .default('pending')
 ];
 
 // Validaciones para la actualizacion de un usuario

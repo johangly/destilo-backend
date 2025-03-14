@@ -17,6 +17,9 @@ const createSaleValidations = [
     body('id_factura')
         .notEmpty().withMessage('El ID de factura es requerido')
         .isInt().withMessage('El ID de factura debe ser un número entero'),
+    body('customer_id')
+        .notEmpty().withMessage('El ID del cliente es requerido')
+        .isInt().withMessage('El ID del cliente debe ser un número entero'),
     body('productos')
         .isArray({ min: 1 }).withMessage('Debe incluir al menos un producto'),
     body('productos.*.cantidad')

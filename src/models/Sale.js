@@ -1,6 +1,7 @@
 const { DataTypes } = require('sequelize');
 const sequelize = require('../config/sequelize');
 
+
 const Sale = sequelize.define('Sale', {
     id: {
         type: DataTypes.INTEGER,
@@ -14,6 +15,14 @@ const Sale = sequelize.define('Sale', {
     id_factura: {
         type: DataTypes.BIGINT,
         allowNull: false
+    },
+    customer_id: { 
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        references: {
+            model: 'Customer',
+            key: 'id'
+        }
     }
 }, {
     tableName: 'sells',
@@ -23,6 +32,7 @@ const Sale = sequelize.define('Sale', {
 // Importamos SaleItem después de definir Sale para evitar dependencias circulares
 const SaleItem = require('./SaleItem');
 const SaleService = require('./SaleService');
+const Customer = require('./Customer');
 
 // Definir la relación con SaleItem
 Sale.hasMany(SaleItem, {
@@ -34,6 +44,12 @@ Sale.hasMany(SaleItem, {
 Sale.hasMany(SaleService, {
     foreignKey: 'sell_id',
     as: 'services'
+});
+
+// Definir la relación con Customer 
+Sale.belongsTo(Customer, {
+    foreignKey: 'customer_id', // Clave foránea en el modelo Sale
+    as: 'customer'            // Alias para la relación
 });
 
 

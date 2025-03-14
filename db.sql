@@ -94,3 +94,12 @@ CREATE TABLE users (
   role ENUM('admin', 'employee') NOT NULL DEFAULT 'employee',
   createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Tabla password_reset_tokens
+CREATE TABLE password_reset_tokens (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  token VARCHAR(255) NOT NULL,
+  expiration DATETIME NOT NULL,
+  user_id INT NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);

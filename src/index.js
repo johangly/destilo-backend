@@ -10,6 +10,9 @@ const saleRoutes = require('./routes/saleRoutes');
 const generalDataRoutes = require('./routes/generalDataRoutes');
 const loginRoutes = require('./routes/loginRoutes');
 const userRoutes = require('./routes/userRoutes');
+const passwordResetRoutes = require('./routes/passwordResetRoutes');
+const emailTestRoutes = require('./routes/emailTest.routes');
+const tokenValidationRoutes = require('./routes/tokenValidationRoutes');
 
 // Inicialización
 const app = express();
@@ -45,6 +48,9 @@ app.use(`${API_PREFIX}/sells`, saleRoutes);
 app.use(`${API_PREFIX}/users`, userRoutes);
 app.use(`${API_PREFIX}/general`, generalDataRoutes);
 app.use(`${API_PREFIX}/login`, loginRoutes);
+app.use(`${API_PREFIX}/reset-password`, passwordResetRoutes);
+app.use(`${API_PREFIX}/email-test`, emailTestRoutes);
+app.use(`${API_PREFIX}/token-validation`, tokenValidationRoutes);
 
 // Manejo de errores
 app.use((err, req, res, next) => {

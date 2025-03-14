@@ -18,6 +18,10 @@ const login = async (req, res) => {
             return res.status(401).json({ message: 'Credenciales inválidas' });
         }
 
+        if (user.status !== 'validated') {
+            return res.status(401).json({ message: 'Credenciales inválidas' });
+        }
+
         // Verificar la contraseña
         const isValidPassword = await comparePassword(password, user.password);
         if (!isValidPassword) {

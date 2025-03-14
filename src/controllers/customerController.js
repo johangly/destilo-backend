@@ -55,6 +55,7 @@ const getCustomers = async (req, res) => {
 // Crear nuevo cliente
 const createCustomer = async (req, res) => {
     try {
+        console.log('entrando al createCustomer')
         const { 
             cedula,
             ciudad,
@@ -69,7 +70,30 @@ const createCustomer = async (req, res) => {
             rif,
             telefono,
         } = req.body;
-        console.log('---------------', telefono,'---------------')
+
+        if (!cedula || !cliente || !email) {
+            return res.status(400).json({
+                error: 'Datos incompletos',
+                detalles: 'Se requieren: cedula, cliente, email y telefono'
+            });
+        }
+        console.log('########## cliente: ', cliente)
+        const existingCustomer = await Customer.findOne({
+            where: {
+                [Op.or]: [
+                    { cedula },
+                    { cliente },
+                    { email }
+                ]
+            }
+        });
+        console.log('########## cliente exitente: ', existingCustomer)
+
+        if (existingCustomer) {
+            res.status(200).json(existingCustomer);
+            return;
+        }
+
         const customer = await Customer.create({
             cedula,
             ciudad,

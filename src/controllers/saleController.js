@@ -148,9 +148,11 @@ const isItemAssociatedWithService = (item, services) => {
     );
 };
 
-const buildSaleResult = (sale, services, independentItems) => {
+const buildSaleResult = (sale, services, independentItems, customer) => {
+    const { customer_id, ...saleData } = sale.dataValues;
     return {
-        ...sale.dataValues,
+        ...saleData,
+        customer: customer.dataValues,
         items: [...services, ...independentItems].sort((a, b) => 
             new Date(b.fecha) - new Date(a.fecha)
         )
@@ -165,6 +167,15 @@ const getSaleById = async (req, res) => {
         const sale = await getSaleData(id);
         if (!sale) {
             return res.status(404).json({ error: 'Venta no encontrada' });
+        }
+
+        if(!sale.customer_id) {
+            return res.status(404).json({ error: 'La venta no tiene un cliente asociado' });
+        }
+
+        const customer = await Customer.findByPk(sale.customer_id);
+        if (!customer) {
+            return res.status(404).json({ error: 'Cliente no encontrado' });
         }
 
         // Obtener servicios y sus items asociados
@@ -183,7 +194,7 @@ const getSaleById = async (req, res) => {
         const independentItems = filterIndependentItems(saleItems, saleServices);
 
         // Construir resultado final
-        const result = buildSaleResult(sale, saleServices, independentItems);
+        const result = buildSaleResult(sale, saleServices, independentItems, customer);
 
         res.json(result);
     } catch (error) {
@@ -199,11 +210,10 @@ const getSaleById = async (req, res) => {
 const createSale = async (req, res) => {
     const t = await sequelize.transaction();
     try {
-        const { fecha, id_factura, productos } = req.body;
-        console.log('productos:', productos)
+        const { fecha, id_factura, customer_id, productos } = req.body;
 
         // Verificar que todos los campos requeridos estén presentes
-        if (!fecha || !id_factura || !productos || !productos.length) {
+        if (!fecha || !id_factura || !customer_id || !productos || !productos.length) {
             return res.status(400).json({
                 error: 'Datos incompletos',
                 detalles: 'Se requieren: fecha, id_factura y al menos un producto'
@@ -230,9 +240,7 @@ const createSale = async (req, res) => {
             }
         });
         // Verificar y validar todos los productos antes de crear la venta
-        console.log('productosDeStock',productosDeStock)
         for (const producto of productosDeStock) {
-            console.log('producto desde el primer for',producto)
             if (!producto.cantidad || !producto.codigo || !producto.precioTotal || !producto.precioUnitario) {
                 return res.status(400).json({
                     error: 'Datos de producto incompletos',
@@ -262,14 +270,13 @@ const createSale = async (req, res) => {
         // Crear la venta
         const sale = await Sale.create({
             fecha,
-            id_factura
+            id_factura,
+            customer_id
         }, { transaction: t });
 
-        // return;
         // Crear los productos vendidos y actualizar stock
         const productosVendidos = [];
         for (const producto of productos) {
-            console.log('producto desde el segundo for:',producto)
             if (producto.type === 'stock') {
                 const stock = await Stock.findOne({
                     where: { codigo: producto.codigo },
@@ -308,26 +315,14 @@ const createSale = async (req, res) => {
 
                 productosVendidos.push(servicioVendido);
                 if (producto.productosAsociado.length > 0 && producto.productosAsociado) {
-                    console.log('producto.productosAsociado',producto.productosAsociado)
                     for (const stockItem of producto.productosAsociado) {
-                        console.log('stockItem', stockItem)
                         const stock = await Stock.findOne({
                             where: { codigo: stockItem.codigo },
                             transaction: t,
                             lock: true // Bloquear el registro para evitar condiciones de carrera
                         });
-                        console.log('stockItem 1')
                         const servicioVendidoId = await servicioVendido.id
-                        console.log('simulacion de insercion',{
-                            sell_id: sale.id,
-                            cantidad: parseInt(stockItem.cantidadInput),
-                            fecha: fecha,
-                            producto_id: stockItem.codigo,
-                            service_id: Number(servicioVendidoId),
-                            nombre: stockItem.producto,
-                            precioTotal: parseFloat(stockItem.precioTotal).toFixed(2),
-                            precioUnitario: parseFloat(stockItem.precioUnitario).toFixed(2)
-                        })
+                        
                         // Crear el registro de producto vendido
                         const productoVendido = await SaleItem.create({
                             sell_id: sale.id,
@@ -340,16 +335,12 @@ const createSale = async (req, res) => {
                             precioUnitario: parseFloat(stockItem.precioUnitario).toFixed(2)
                         }, { transaction: t });
 
-                        console.log('stockItem 2')
                         productosVendidos.push(productoVendido);
-                        console.log('stockItem 3')
 
                         // Actualizar stock
                         await stock.update({
                             cantidad: (parseInt(stock.cantidad) - parseInt(stockItem.cantidadInput)).toString()
                         }, { transaction: t });
-                        console.log('stockItem 4')
-
                     }
                 }
             }
