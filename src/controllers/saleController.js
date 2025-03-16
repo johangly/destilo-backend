@@ -7,6 +7,7 @@ const Stock = require('../models/Stock');
 const Customer = require('../models/Customer');
 const { Op } = require('sequelize');
 const sequelize = require('../config/sequelize');
+const moment = require('moment');
 
 // Listar ventas con paginación y filtros
 // Función auxiliar para obtener todas las ventas
@@ -438,9 +439,125 @@ const updateSaleStatus = async (req, res) => {
     }
 };
 
+const getWeekSales = async (req, res) => {
+    try {
+        const endDate = moment().endOf('day');
+        const startDate = moment().subtract(7, 'days').startOf('day');
+        
+        // Obtener ventas de la última semana
+        const sales = await Sale.findAll({
+            where: {
+                fecha: {
+                    [Op.between]: [startDate.toISOString(), endDate.toISOString()]
+                }
+            },
+            include: [
+                { model: Customer, as: 'customer' }
+            ]
+        });
+
+        if (!sales || sales.length === 0) {
+            return res.status(404).json({ error: 'No se encontraron ventas en la última semana' });
+        }
+
+        // Obtener servicios y sus items asociados
+        const saleServices = await getAllSaleServicesWithItems(sales);
+        
+        // Obtener items no asociados a servicios
+        const saleItems = await getAllSaleItems(sales);
+
+        // Filtrar items independientes
+        const independentItems = filterIndependentItems(saleItems, saleServices);
+
+        // Construir resultado final
+        const result = buildSalesResult(sales, saleServices, independentItems);
+
+        res.json({
+            total: result.length,
+            datos: result
+        });
+    } catch (error) {   
+        console.error('Error al obtener ventas de la semana:', error);
+        res.status(500).json({
+            error: 'Error al obtener las ventas de la semana',
+            detalles: error.message
+        });
+    }
+};
+
+const getBestSells = async (req, res) => {
+    try {
+        const bestSells = await SaleItem.findAll({
+            attributes: [
+                'nombre',
+                'producto_id',
+                [sequelize.fn('SUM', sequelize.col('cantidad')), 'totalVendido'],
+                [sequelize.fn('COUNT', sequelize.col('sell_id')), 'totalVentas'],
+                [sequelize.fn('AVG', sequelize.col('precioUnitario')), 'precioPromedio']
+            ],
+            group: ['producto_id', 'nombre'],
+            order: [[sequelize.fn('SUM', sequelize.col('cantidad')), 'DESC']],
+            having: sequelize.literal('totalVendido > 0')
+        });
+        console.log('bestSells',bestSells)
+        res.json({
+            total: bestSells.length,
+            datos: bestSells.map(item => ({
+                nombre: item.nombre,
+                producto_id: item.producto_id,
+                totalVendido: parseInt(item.getDataValue('totalVendido')),
+                totalVentas: parseInt(item.getDataValue('totalVentas')),
+                precioUnitario: parseFloat(item.getDataValue('precioPromedio')).toFixed(2)
+            }))
+        });
+    } catch (error) {
+        console.error('Error al obtener las mejores ventas:', error);
+        res.status(500).json({
+            error: 'Error al obtener las mejores ventas',
+            detalles: error.message
+        });
+    }
+};
+
+const getBestServices = async (req, res) => {
+    try {
+        const bestServices = await SaleService.findAll({
+            attributes: [
+                'nombre',
+                'service_id',
+                [sequelize.fn('SUM', sequelize.col('cantidad')), 'totalVendido'],
+                [sequelize.fn('COUNT', sequelize.col('sell_id')), 'totalVentas'],
+                [sequelize.fn('AVG', sequelize.col('precioUnitario')), 'precioPromedio']
+            ],
+            group: ['service_id', 'nombre'],
+            order: [[sequelize.fn('SUM', sequelize.col('cantidad')), 'DESC']],
+            having: sequelize.literal('totalVendido > 0')
+        });
+        console.log('bestServices',bestServices)
+        res.json({
+            total: bestServices.length,
+            datos: bestServices.map(item => ({
+                nombre: item.nombre,
+                service_id: item.service_id,
+                totalVendido: parseInt(item.getDataValue('totalVendido')),
+                totalVentas: parseInt(item.getDataValue('totalVentas')),
+                precioUnitario: parseFloat(item.getDataValue('precioPromedio')).toFixed(2)
+            }))
+        });
+    } catch (error) {
+        console.error('Error al obtener los mejores servicios:', error);
+        res.status(500).json({
+            error: 'Error al obtener los mejores servicios',
+            detalles: error.message
+        });
+    }
+}
 module.exports = {
     getSales,
     getSaleById,
     createSale,
-    updateSaleStatus
+    updateSaleStatus,
+    getWeekSales,
+    getBestSells,
+    getBestServices
 };

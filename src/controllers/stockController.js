@@ -1,6 +1,6 @@
 const Stock = require('../models/Stock');
+const { Supplier } = require('../models/Supplier');
 const Service = require('../models/Service');
-const Supplier = require('../models/Supplier');
 const { Op } = require('sequelize');
 const sequelize = require('../config/sequelize');
 
@@ -14,13 +14,19 @@ const getStocks = async (req, res) => {
         if (search) {
             where[Op.or] = [
                 { producto: { [Op.like]: `%${search}%` } },
-                { proveedor: { [Op.like]: `%${search}%` } },
-                { codigo: { [Op.like]: `%${search}%` } }
+                { codigo: { [Op.like]: `%${search}%` } },
+                { '$proveedor.nombre$': { [Op.like]: `%${search}%` } },
+                { '$proveedor.razonSocial$': { [Op.like]: `%${search}%` } }
             ];
         }
 
         const stocks = await Stock.findAndCountAll({
             where,
+            include: [{
+                model: Supplier,
+                as: 'proveedor',
+                attributes: ['id', 'nombre', 'razonSocial', 'rif', 'telefono', 'email']
+            }],
             limit: parseInt(limit),
             offset: parseInt(offset),
             order: [
@@ -49,7 +55,13 @@ const getStocks = async (req, res) => {
 const getStockById = async (req, res) => {
     try {
         const { id } = req.params;
-        const stock = await Stock.findByPk(id);
+        const stock = await Stock.findByPk(id, {
+            include: [{
+                model: Supplier,
+                as: 'proveedor',
+                attributes: ['id', 'nombre', 'razonSocial', 'rif', 'telefono', 'email']
+            }]
+        });
         
         if (!stock) {
             return res.status(404).json({
@@ -71,10 +83,10 @@ const getStockById = async (req, res) => {
 // Crear nuevo item de inventario
 const createStock = async (req, res) => {
     try {
-        const { cantidad, codigo, precioUnitario, producto, proveedor } = req.body;
+        const { cantidad, codigo, precioUnitario, producto, proveedor_id } = req.body;
 
         // Verificar que todos los campos requeridos estén presentes
-        if (!cantidad || !codigo || !precioUnitario || !producto || !proveedor) {
+        if (!cantidad || !codigo || !precioUnitario || !producto || !proveedor_id) {
             return res.status(400).json({
                 error: 'Todos los campos son requeridos',
                 detalles: 'Se requieren: cantidad, codigo, precioUnitario, producto y proveedor'
@@ -96,7 +108,7 @@ const createStock = async (req, res) => {
             codigo,
             precioUnitario,
             producto,
-            proveedor
+            proveedor_id
         });
         
         res.status(201).json(stock);
@@ -154,7 +166,7 @@ const updateStockQuantity = async (req, res) => {
 const updateStock = async (req, res) => {
     try {
         const { id } = req.params;
-        const { cantidad, codigo, precioUnitario, producto, proveedor } = req.body;
+        const { cantidad, codigo, precioUnitario, producto, proveedor_id } = req.body;
         
         // Verificar que el producto exista
         const stock = await Stock.findByPk(id);
@@ -182,7 +194,7 @@ const updateStock = async (req, res) => {
             codigo: codigo || stock.codigo,
             precioUnitario: precioUnitario || stock.precioUnitario,
             producto: producto || stock.producto,
-            proveedor: proveedor || stock.proveedor
+            proveedor_id: proveedor_id || stock.proveedor_id
         });
 
         // Obtener el stock actualizado

@@ -103,3 +103,46 @@ CREATE TABLE password_reset_tokens (
   user_id INT NOT NULL,
   FOREIGN KEY (user_id) REFERENCES users(id)
 );
+
+CREATE TABLE activation_tokens (
+  id INT AUTO_INCREMENT PRIMARY KEY, -- Identificador único del token
+  token VARCHAR(255) NOT NULL, -- Token único para la activación
+  expiration DATETIME NOT NULL, -- Fecha y hora de expiración del token
+  user_id INT NOT NULL, -- Clave foránea que referencia al usuario
+  FOREIGN KEY (user_id) REFERENCES users(id) -- Relación con la tabla users
+);
+
+-- para agregar customer_id a la tabla sells
+ALTER TABLE sells
+ADD COLUMN customer_id INT,
+ADD CONSTRAINT fk_customer
+    FOREIGN KEY (customer_id)
+    REFERENCES clientes(id);
+
+--  para reemplazar NULL por 0 en la columna customer_id
+UPDATE sells
+SET customer_id = 0
+WHERE customer_id IS NULL;
+
+ALTER TABLE sells
+MODIFY COLUMN customer_id INT NOT NULL;
+
+-- borrar la columna proveedor
+ALTER TABLE stocks
+DROP COLUMN proveedor;
+
+-- modificar la tabla para que ahora tenga proveedor_id en vez de proveedor simplemente
+ALTER TABLE stocks
+ADD COLUMN proveedor_id INT,
+ADD CONSTRAINT fk_stocks_proveedor
+FOREIGN KEY (proveedor_id)
+REFERENCES proveedores(id);
+
+--  para reemplazar NULL por 2 en la columna customer_id
+UPDATE stocks
+SET proveedor_id = 2
+WHERE proveedor_id IS NULL;
+
+-- agregarle NOT NULL a la columna proveedor_id
+ALTER TABLE stocks
+MODIFY COLUMN proveedor_id INT NOT NULL;

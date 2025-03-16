@@ -4,7 +4,10 @@ const {
     getSales, 
     getSaleById, 
     createSale, 
-    updateSaleStatus 
+    updateSaleStatus,
+    getWeekSales,
+    getBestSells,
+    getBestServices
 } = require('../controllers/saleController');
 const { body } = require('express-validator');
 
@@ -46,9 +49,13 @@ const updateStatusValidation = [
 ];
 
 // Rutas
-router.get('/', getSales);
-router.get('/:id', getSaleById);
-router.post('/', createSaleValidations, createSale);
+
+router.get('/best-services', getBestServices);
+router.get('/week-sells', getWeekSales);
+router.get('/best-sells', getBestSells);
 router.put('/:id/status', updateStatusValidation, updateSaleStatus);
+router.get('/:id', getSaleById);
+router.get('/', getSales);
+router.post('/', createSaleValidations, createSale);
 
 module.exports = router;

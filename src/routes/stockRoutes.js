@@ -27,10 +27,9 @@ const stockValidations = [
         .notEmpty().withMessage('El producto es requerido')
         .isString().withMessage('El producto debe ser texto')
         .isLength({ max: 100 }).withMessage('El producto no puede exceder 100 caracteres'),
-    body('proveedor')
+    body('proveedor_id')
         .notEmpty().withMessage('El proveedor es requerido')
-        .isString().withMessage('El proveedor debe ser texto')
-        .isLength({ max: 100 }).withMessage('El proveedor no puede exceder 100 caracteres')
+        .isInt().withMessage('El proveedor debe ser un número entero')
 ];
 
 const quantityValidation = [
