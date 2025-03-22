@@ -73,7 +73,11 @@ const getSales = async (req, res) => {
         // Obtener todas las ventas
         const sales = await getAllSales();
         if (!sales || sales.length === 0) {
-            return res.status(404).json({ error: 'No se encontraron ventas' });
+            res.json({
+                total: 0,
+                datos: []
+            });
+            return;
         }
 
         // Obtener servicios y sus items asociados
