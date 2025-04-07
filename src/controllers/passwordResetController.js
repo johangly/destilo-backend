@@ -74,8 +74,6 @@ const resetPassword = async (req, res) => {
     
     try {
         const { token, newPassword } = req.body;
-        console.log('Token recibido:', token);
-        console.log('Nueva contraseña:', newPassword);
         // Buscar token válido
         const resetToken = await PasswordResetToken.findOne({
             where: {
