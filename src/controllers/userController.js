@@ -11,7 +11,7 @@ const { sendActivationEmail } = require('../utils/emailService');
 const getUsers = async (req, res) => {
     try {
         const users = await User.findAll({
-            attributes: ['id', 'username', 'role', 'email', 'createdAt']
+            attributes: ['id', 'username', 'role', 'email', 'status', 'createdAt']
         });
         res.json(users);
     } catch (error) {
@@ -44,7 +44,7 @@ const createUser = async (req, res) => {
     const transaction = await sequelize.transaction();
 
     try {
-        const { username, password, role, email } = req.body;
+        const { username, password, role, email, requireEmailValidation } = req.body;
 
         // Verificar si el usuario ya existe por username o email
         const existingUser = await User.findOne({
@@ -74,39 +74,44 @@ const createUser = async (req, res) => {
             email,
             password: hashedPassword,
             role: role || 'employee',
-            status: 'pending',
+            status: requireEmailValidation ? 'pending' : 'validated',
             createdAt: new Date()
         }, { transaction });
 
-        // Generar token de activación
-        const activationToken = crypto.randomBytes(32).toString('hex');
-        const expirationDate = new Date();
-        expirationDate.setHours(expirationDate.getHours() + 24); // Token válido por 24 horas
+        // Si se requiere validación por email
+        if (requireEmailValidation) {
+            try {
+                // Generar token de activación
+                const activationToken = crypto.randomBytes(32).toString('hex');
+                const expirationDate = new Date();
+                expirationDate.setHours(expirationDate.getHours() + 24); // Token válido por 24 horas
 
-        // Crear registro de token de activación
-        await ActivationToken.create({
-            token: activationToken,
-            expiration: expirationDate,
-            user_id: user.id
-        }, { transaction });
+                // Crear registro de token de activación
+                await ActivationToken.create({
+                    token: activationToken,
+                    expiration: expirationDate,
+                    user_id: user.id
+                }, { transaction });
 
-        try {
-            // Enviar correo de activación
-            await sendActivationEmail(user, activationToken);
-        } catch (emailError) {
-            // Si falla el envío del correo, deshacer la transacción
-            await transaction.rollback();
-            console.error('Error al enviar el correo de activación:', emailError);
-            return res.status(500).json({
-                message: 'Error al enviar el correo de activación. No se ha creado la cuenta.'
-            });
+                // Enviar email de activación
+                await sendActivationEmail(user, activationToken);
+            } catch (emailError) {
+                // Si falla el envío del correo, deshacer la transacción
+                await transaction.rollback();
+                console.error('Error al enviar el correo de activación:', emailError);
+                return res.status(500).json({
+                    message: 'Error al enviar el correo de activación. No se ha creado la cuenta.'
+                });
+            }
         }
 
         // Si todo sale bien, confirmar la transacción
         await transaction.commit();
 
         res.status(201).json({
-            message: 'Usuario creado exitosamente. Por favor, revisa tu correo electrónico para activar tu cuenta.',
+            message: requireEmailValidation 
+                ? 'Usuario creado exitosamente. Por favor, revisa tu correo electrónico para activar tu cuenta.'
+                : 'Usuario creado exitosamente.',
             user: {
                 id: user.id,
                 username: user.username,
